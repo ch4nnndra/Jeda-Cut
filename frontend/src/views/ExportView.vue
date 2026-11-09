@@ -27,7 +27,6 @@ const summary = computed(() => [
   ['Padding awal / akhir', `${p.pad_start} / ${p.pad_end} s`],
   ['Metode threshold', methods[p.threshold_method]],
   ['Crossfade audio', `${p.audio_crossfade_ms} ms`],
-  ['Crossfade video', p.video_crossfade ? '3 frame' : 'Nonaktif'],
   ['Encoder', st.value.encoder || (store.info.has_video ? p.encoder : 'tanpa video')],
 ])
 </script>

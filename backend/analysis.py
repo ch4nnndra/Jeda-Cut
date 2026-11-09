@@ -27,7 +27,6 @@ class TrimParams(BaseModel):
     median: int = Field(5, ge=1, le=15)
     zcr_rescue: bool = True
     audio_crossfade_ms: float = Field(15, ge=0, le=50)
-    video_crossfade: bool = False
     encoder: Literal["auto", "h264_nvenc", "libx264"] = "auto"
 
 

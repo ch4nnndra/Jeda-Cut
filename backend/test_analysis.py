@@ -32,7 +32,7 @@ for method in ("midpoint", "dual"):
 edl = [{"start": 0, "end": 1, "action": "keep"}, {"start": 1, "end": 2, "action": "keep"},
        {"start": 2, "end": 3, "action": "cut"}, {"start": 3, "end": 4, "action": "keep"}]
 assert keep_ranges(edl) == [[0, 2], [3, 4]]
-graph, v, a = build_graph(keep_ranges(edl), True, 0.015, 0)
-assert "concat=n=2:v=1:a=1[v][a]" in graph and (v, a) == ("v", "a")
+graph = build_graph(keep_ranges(edl), True, 0.015)
+assert "concat=n=2:v=1:a=1[v][a]" in graph and graph.count("afade=t=in") == 2
 
 print("OK")

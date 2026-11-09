@@ -39,7 +39,6 @@ const reset = () => Object.assign(p, store.defaults)
           </select>
         </div>
       </div>
-      <label class="check"><input v-model="p.video_crossfade" type="checkbox" /> Crossfade video (3 frame)</label>
       <label>Encoder</label>
       <select v-model="p.encoder">
         <option value="auto">Otomatis</option>
@@ -64,5 +63,4 @@ const reset = () => Object.assign(p, store.defaults)
 details { border-top: 1px solid var(--border); margin: 18px 0; padding-top: 14px; }
 summary { cursor: pointer; font-weight: 600; margin-bottom: 12px; }
 .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
-.check { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; color: var(--text); font-size: 15px; }
 </style>

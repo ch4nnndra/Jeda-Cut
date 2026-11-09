@@ -31,39 +31,25 @@ def keep_ranges(segments):
     return keeps
 
 
-def build_graph(keeps, has_video, fade, xfade):
-    """Susun filtergraph: trim/atrim per segmen keep, lalu concat (atau xfade/acrossfade).
+def build_graph(keeps, has_video, fade):
+    """Susun filtergraph: trim/atrim per segmen keep, lalu concat. Output berlabel [v] dan [a].
 
-    fade  = durasi fade audio (detik) di tiap titik potong, mode tanpa crossfade video.
-    xfade = durasi crossfade video (detik), 0 jika nonaktif.
-    Return (graph, label video, label audio).
+    fade = durasi fade audio (detik) di tiap titik potong, 0 jika nonaktif.
     """
     lines = []
     for i, (s, e) in enumerate(keeps):
         if has_video:
             lines.append(f"[0:v]trim=start={s}:end={e},setpts=PTS-STARTPTS[v{i}]")
         a = f"[0:a]atrim=start={s}:end={e},asetpts=PTS-STARTPTS"
-        if fade and not xfade:
+        if fade:
             # Fade out + fade in 15 ms di tiap sambungan, bukan acrossfade yang saling tumpang.
             # acrossfade memendekkan audio 15 ms per potongan sehingga 100 potongan = 1,5 s tidak sinkron.
             a += f",afade=t=in:d={fade},afade=t=out:st={max(0, e - s - fade):.4f}:d={fade}"
         lines.append(a + f"[a{i}]")
 
-    if xfade and has_video:
-        # Crossfade video beberapa frame. Tiap sambungan overlap sebesar xfade detik, dan audio
-        # memakai acrossfade dengan durasi yang sama supaya audio dan video tetap sinkron.
-        # offset = panjang hasil sejauh ini dikurangi xfade.
-        v, a, length = "v0", "a0", keeps[0][1] - keeps[0][0]
-        for i in range(1, len(keeps)):
-            offset = length - xfade
-            lines.append(f"[{v}][v{i}]xfade=transition=fade:duration={xfade:.4f}:offset={offset:.4f}[vx{i}]")
-            lines.append(f"[{a}][a{i}]acrossfade=d={xfade:.4f}[ax{i}]")
-            v, a, length = f"vx{i}", f"ax{i}", offset + keeps[i][1] - keeps[i][0]
-        return ";\n".join(lines), v, a
-
     pads = "".join((f"[v{i}]" if has_video else "") + f"[a{i}]" for i in range(len(keeps)))
     lines.append(f"{pads}concat=n={len(keeps)}:v={int(has_video)}:a=1" + ("[v]" if has_video else "") + "[a]")
-    return ";\n".join(lines), "v", "a"
+    return ";\n".join(lines)
 
 
 def render(src, edl, info, out, on_progress=lambda pct: None):
@@ -74,9 +60,8 @@ def render(src, edl, info, out, on_progress=lambda pct: None):
         raise ValueError("Tidak ada segmen Pertahankan di EDL")
 
     has_video = info["has_video"]
-    xfade = 3 / info["fps"] if p.get("video_crossfade") and has_video and info["fps"] else 0
-    graph, v, a = build_graph(keeps, has_video, p.get("audio_crossfade_ms", 15) / 1000, xfade)
-    total = sum(e - s for s, e in keeps) - xfade * (len(keeps) - 1)
+    graph = build_graph(keeps, has_video, p.get("audio_crossfade_ms", 15) / 1000)
+    total = sum(e - s for s, e in keeps)
 
     # Graph ditulis ke file, karena ratusan potongan bisa melebihi batas panjang command line Windows.
     # Ini pengganti render per bagian (3.2.10).
@@ -88,11 +73,11 @@ def render(src, edl, info, out, on_progress=lambda pct: None):
     encoder = None
     if has_video:
         encoder = pick_encoder(p.get("encoder", "auto"))
-        cmd += ["-map", f"[{v}]"]
+        cmd += ["-map", "[v]"]
         cmd += (["-c:v", "h264_nvenc", "-rc", "vbr", "-cq", "20", "-b:v", "0"] if encoder == "h264_nvenc"
                 else ["-c:v", "libx264", "-crf", "20", "-preset", "medium"])
         cmd += ["-pix_fmt", "yuv420p"]  # agar bisa diputar di semua browser/pemutar
-    cmd += ["-map", f"[{a}]", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
+    cmd += ["-map", "[a]", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
             "-progress", "pipe:1", "-nostats", str(out)]
 
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
