@@ -1,7 +1,6 @@
 # JedaCut
 
 Aplikasi web pemotong jeda otomatis pada video menggunakan Short-Time Energy dan Zero Crossing Rate.
-Implementasi dari Laporan Perancangan JedaCut (Bab III).
 
 ## Kebutuhan
 
