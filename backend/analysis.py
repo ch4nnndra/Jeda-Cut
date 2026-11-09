@@ -20,8 +20,9 @@ class TrimParams(BaseModel):
     min_speech: float = Field(0.15, ge=0, le=2)
     pad_start: float = Field(0.15, ge=0, le=1)
     pad_end: float = Field(0.20, ge=0, le=1)
-    threshold_method: Literal["stat", "dual", "midpoint"] = "stat"
-    k: float = Field(3, ge=1, le=6)
+    # Metode statistik (mu + k sigma) dihapus: noise floor sering terisi ucapan pelan sehingga
+    # threshold terlalu tinggi dan ucapan pelan ikut terpotong. Bawaan diganti midpoint.
+    threshold_method: Literal["midpoint", "dual"] = "midpoint"
     hysteresis_db: float = Field(3, ge=0, le=12)
     median: int = Field(5, ge=1, le=15)
     zcr_rescue: bool = True
@@ -89,10 +90,9 @@ def thresholds(energy, zcr, p):
     """Noise floor + threshold adaptif (3.2.5). Hasil: upper, lower, noise floor, batas ZCR."""
     # Noise floor dari 10% frame paling pelan di seluruh rekaman, bukan dari bagian awal saja.
     quiet = np.argsort(energy)[: max(1, len(energy) // 10)]
-    mu, sd = energy[quiet].mean(), energy[quiet].std()
+    mu = energy[quiet].mean()
     z_lim = zcr[quiet].mean() + 2 * zcr[quiet].std()
 
-    lower = None
     if p["threshold_method"] == "dual":
         # Rumus Rao dkk. berlaku pada energi linear, jadi dB dikembalikan ke linear dulu.
         e = 10 ** (energy / 10)
@@ -102,10 +102,9 @@ def thresholds(energy, zcr, p):
         sl = above.mean() if above.size else t1             # (3.5)
         t2 = t1 + 0.25 * (sl - t1)                          # (3.6)
         upper, lower = 10 * np.log10(t2), 10 * np.log10(t1)
-    elif p["threshold_method"] == "midpoint":
-        upper = (np.percentile(energy, 10) + np.percentile(energy, 90)) / 2  # (3.7)
     else:
-        upper = mu + p["k"] * sd                            # (3.3)
+        upper = (np.percentile(energy, 10) + np.percentile(energy, 90)) / 2  # midpoint (3.7)
+        lower = None
 
     # Pengaman: minimal 6 dB di atas noise floor, maksimal -20 dBFS.
     upper = min(max(upper, mu + 6), -20)

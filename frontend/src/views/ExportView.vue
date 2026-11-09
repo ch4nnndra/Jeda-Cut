@@ -20,7 +20,7 @@ onUnmounted(() => clearInterval(timer))
 const orig = store.info.duration
 const ratio = computed(() => (st.value.out_duration || 0) / orig)
 const p = store.edl.params
-const methods = { stat: 'Statistik (μ + kσ)', dual: 'Dual threshold', midpoint: 'Midpoint' }
+const methods = { midpoint: 'Midpoint', dual: 'Dual threshold' }
 const summary = computed(() => [
   ['Durasi jeda minimum', `${p.min_silence} s`],
   ['Durasi suara minimum', `${p.min_speech} s`],

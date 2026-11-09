@@ -34,9 +34,8 @@ const reset = () => Object.assign(p, store.defaults)
         <div>
           <label>Metode threshold</label>
           <select v-model="p.threshold_method">
-            <option value="stat">Statistik</option>
-            <option value="dual">Dual threshold</option>
             <option value="midpoint">Midpoint</option>
+            <option value="dual">Dual threshold</option>
           </select>
         </div>
       </div>

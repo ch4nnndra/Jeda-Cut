@@ -16,7 +16,7 @@ x = np.concatenate([part(1, 1e-3), part(2, 0.3), part(0.3, 1e-3), part(1, 0.3), 
                     part(0.05, 0.5), part(1.5, 1e-3), part(1, 0.3), part(1, 1e-3)]).astype(np.float32)
 duration = len(x) / SR
 
-for method in ("stat", "dual", "midpoint"):
+for method in ("midpoint", "dual"):
     p = TrimParams(threshold_method=method).model_dump()
     segs = detect(x, duration, p)["segments"]
     keeps = [(s["start"], s["end"]) for s in segs if s["action"] == "keep"]
