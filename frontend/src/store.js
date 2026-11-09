@@ -12,8 +12,12 @@ export const store = reactive({
   timeline: null,
 })
 
+// Alamat backend. Kosong = domain yang sama (dev lewat proxy Vite, atau dilayani FastAPI).
+// Saat frontend di Vercel dan backend di host lain, isi VITE_API_URL (contoh: https://nama-space.hf.space).
+export const API = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '') + '/api'
+
 export async function api(path, method = 'GET', body) {
-  const res = await fetch('/api' + path, {
+  const res = await fetch(API + path, {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : {},
     body: body && JSON.stringify(body),

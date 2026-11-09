@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import { store, analyze, startRender, fmtTime, fmtSize } from '../store'
+import { store, API, analyze, startRender, fmtTime, fmtSize } from '../store'
 import TrimSettings from '../components/TrimSettings.vue'
 
 const input = ref(null)
@@ -28,7 +28,7 @@ function upload(file) {
     else error.value = data.detail || 'Unggah gagal'
   }
   xhr.onerror = () => (error.value = 'Koneksi ke server gagal')
-  xhr.open('POST', '/api/upload')
+  xhr.open('POST', `${API}/upload`)
   xhr.send(form)
 }
 

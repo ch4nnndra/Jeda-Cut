@@ -1,5 +1,6 @@
 """Server REST API JedaCut (Tabel 3.4). Jalankan: python main.py"""
 import json
+import os
 import shutil
 import subprocess
 import threading
@@ -8,6 +9,7 @@ from pathlib import Path
 from typing import List, Literal
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -27,6 +29,15 @@ STORAGE.mkdir()
 jobs = {}
 
 app = FastAPI(title="JedaCut")
+
+# Frontend di domain lain (Vercel) butuh izin CORS. Isi CORS_ORIGINS dengan domain frontend,
+# pisahkan dengan koma. Tanpa env ini semua domain diizinkan.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",")],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class Segment(BaseModel):

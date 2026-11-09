@@ -1,10 +1,10 @@
 <script setup>
 import { computed, onUnmounted, ref } from 'vue'
-import { store, api, resetAll, fmtTime, fmtSize, baseName } from '../store'
+import { store, API, api, resetAll, fmtTime, fmtSize, baseName } from '../store'
 
 const st = ref({ status: 'rendering', progress: 0 })
 const id = store.info.id
-const outUrl = `/api/download/${id}`
+const outUrl = `${API}/download/${id}`
 const outName = `${baseName(store.info.name)}_jumpcut.mp4`
 const stamp = Date.now() // cache-buster agar render ulang tidak memutar file lama
 
