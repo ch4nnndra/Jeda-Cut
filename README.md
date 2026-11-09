@@ -52,32 +52,37 @@ frontend/src/
 
 ## Deploy
 
-Frontend di Vercel, backend di Hugging Face Spaces (Docker, CPU Basic gratis: 2 vCPU, 16 GB RAM).
+Frontend di Vercel, backend berjalan di laptop sendiri dan dibuka ke internet lewat Cloudflare Tunnel (gratis).
 Backend tidak bisa di Vercel karena batas upload 4,5 MB dan render berjalan di background.
 
-### 1. Backend ke Hugging Face Spaces
+### 1. Backend di laptop + Cloudflare Tunnel
 
-1. Buat Space baru di https://huggingface.co/new-space, pilih SDK **Docker** (template Blank).
-2. Buat access token dengan izin **write** di https://huggingface.co/settings/tokens.
-3. Push isi folder `backend/` ke Space (ganti `USERNAME` dan `NAMA-SPACE`). Saat diminta password, isi dengan token tadi.
+Pasang cloudflared sekali saja (Windows): `winget install Cloudflare.cloudflared`
 
-```bash
-git remote add space https://huggingface.co/spaces/USERNAME/NAMA-SPACE
-git subtree split --prefix backend -b hf-space
-git push --force space hf-space:main
+Terminal 1, jalankan backend. `CORS_ORIGINS` diisi alamat Vercel (tanpa env ini semua domain diizinkan):
+
+```powershell
+$env:CORS_ORIGINS = "https://NAMA-PROJECT.vercel.app"
+python backend/main.py
 ```
 
-Setiap ada perubahan di `backend/`, commit dulu, lalu jalankan ulang dua baris terakhir.
-Space akan build otomatis. Alamat backend: `https://USERNAME-NAMA-SPACE.hf.space`.
+Terminal 2, buka tunnel ke backend:
 
-4. Di Space: **Settings → Variables and secrets → New variable**
-   `CORS_ORIGINS` = alamat frontend Vercel, contoh `https://jeda-cut.vercel.app` (pisahkan dengan koma jika lebih dari satu).
+```bash
+cloudflared tunnel --url http://localhost:8000
+```
+
+Salin alamat `https://xxxx.trycloudflare.com` yang muncul di log. Itu alamat backend.
 
 ### 2. Frontend di Vercel
 
 1. Project Vercel: Root Directory `frontend`, framework Vite.
-2. **Settings → Environment Variables**: `VITE_API_URL` = alamat backend, contoh `https://USERNAME-NAMA-SPACE.hf.space`.
+2. **Settings → Environment Variables**: `VITE_API_URL` = alamat tunnel, contoh `https://xxxx.trycloudflare.com`.
 3. **Redeploy**. Nilai `VITE_API_URL` dibaca saat build, jadi wajib build ulang setelah diubah.
 
-Catatan: Space gratis tidur setelah 48 jam tidak dipakai dan bangun otomatis saat dibuka (butuh beberapa menit).
-File upload di Space hilang setiap restart.
+Catatan:
+- Alamat tunnel berubah setiap cloudflared dijalankan ulang, jadi `VITE_API_URL` harus diganti lalu redeploy.
+- Laptop harus tetap menyala (jangan sleep) selama aplikasi dipakai.
+- Upload lewat Cloudflare gratis maksimal 100 MB per file.
+- File upload di `backend/storage/` dihapus setiap backend dijalankan ulang.
+- Opsional: `backend/Dockerfile` dan `backend/README.md` siap dipakai untuk Hugging Face Spaces (butuh paket PRO).
