@@ -43,4 +43,12 @@ tr { cursor: pointer; }
 tr.cut td:not(:last-child) { color: var(--cut); }
 tr.active { background: var(--panel2); }
 select { padding: 4px 6px; }
+
+/* HP: tabel dipadatkan agar pilihan "Pertahankan" tidak terpotong, sisanya bisa digeser horizontal */
+@media (max-width: 640px) {
+  .scroll { overflow-x: auto; }
+  table { font-size: 13px; }
+  th, td { padding: 6px 3px; white-space: nowrap; }
+  select { width: auto; padding: 4px; font-size: 13px; }
+}
 </style>

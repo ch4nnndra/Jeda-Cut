@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onUnmounted, ref } from 'vue'
-import { store, analyze, startRender, keptDuration, fmtTime, baseName } from '../store'
+import { store, analyze, startRender, keptDuration, fmtTime } from '../store'
 import EdlTable from '../components/EdlTable.vue'
 import AudioTimeline from '../components/AudioTimeline.vue'
 
@@ -45,20 +45,6 @@ async function run(fn) {
   error.value = ''
   try { await fn() } catch (e) { error.value = e.message } finally { busy.value = false }
 }
-
-function download(ext, text, type) {
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(new Blob([text], { type }))
-  a.download = `${baseName(store.info.name)}_edl.${ext}`
-  a.click()
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
-}
-
-const exportJson = () => download('json', JSON.stringify(store.edl, null, 2), 'application/json')
-const exportCsv = () => download('csv',
-  'no,start,end,duration,action\n' + store.edl.segments
-    .map((s, i) => [i + 1, s.start, s.end, (s.end - s.start).toFixed(3), s.action].join(',')).join('\n'),
-  'text/csv')
 </script>
 
 <template>
@@ -108,8 +94,6 @@ const exportCsv = () => download('csv',
   <div class="row footer">
     <button class="link" @click="store.step = 1">← Kembali ke pengaturan</button>
     <div class="spacer"></div>
-    <button @click="exportJson">Ekspor EDL (.json)</button>
-    <button @click="exportCsv">Ekspor EDL (.csv)</button>
     <button class="primary" :disabled="busy || !kept" @click="run(startRender)">Render Video →</button>
   </div>
 </template>
@@ -118,7 +102,19 @@ const exportCsv = () => download('csv',
 .head { align-items: flex-start; margin-bottom: 20px; }
 .stat { display: flex; flex-direction: column; padding: 12px 20px; }
 .stat strong { font-size: 22px; }
-.controls { margin-top: 12px; }
+.controls { margin-top: 12px; flex-wrap: nowrap; } /* tombol Hasil/Asli tetap satu baris */
+.controls span { white-space: nowrap; }
 .sliders { margin-top: 18px; gap: 24px; align-items: flex-end; }
 .footer { margin-top: 24px; }
+
+/* HP: slider dan tombol bawah ditumpuk satu per baris dengan lebar penuh */
+@media (max-width: 640px) {
+  .sliders > *, .footer > * { flex: 1 1 100%; }
+  .footer .spacer { display: none; }
+  .footer .link { text-align: left; }
+  .head .spacer { display: none; }
+  .controls { gap: 6px; }
+  .controls button { padding: 8px 11px; }
+  .controls span { font-size: 13px; }
+}
 </style>

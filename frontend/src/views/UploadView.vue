@@ -99,4 +99,11 @@ async function run(withRender) {
 .file-info { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .file-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ok { color: var(--ok); font-size: 14px; }
+
+@media (max-width: 640px) {
+  .drop { padding: 36px 16px; }
+  .file { flex-wrap: wrap; gap: 12px; }
+  .thumb { width: 96px; height: 54px; }
+  .file button { width: 100%; }
+}
 </style>

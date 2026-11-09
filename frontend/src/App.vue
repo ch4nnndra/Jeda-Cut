@@ -20,7 +20,7 @@ onMounted(async () => {
 
 <template>
   <header class="topbar">
-    <div class="brand"><span class="logo">✂</span> JedaCut</div>
+    <div class="brand"><span class="logo">✂</span> <span class="brand-name">JedaCut</span></div>
     <nav class="steps">
       <button v-for="(name, i) in steps" :key="name" class="pill"
               :class="{ active: store.step === i + 1, done: store.step > i + 1 }"
@@ -60,13 +60,14 @@ h3 { margin: 0 0 14px; font-size: 17px; }
 .brand { font-weight: 700; font-size: 20px; display: flex; gap: 10px; align-items: center; }
 .logo { width: 34px; height: 34px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; }
 .steps { display: flex; gap: 8px; }
-.pill { border-radius: 99px; padding: 6px 16px; }
+.pill { border-radius: 99px; padding: 6px 16px; white-space: nowrap; }
 .pill.active { background: var(--accent); border-color: var(--accent); color: #fff; opacity: 1; }
 .pill.done { color: var(--ok); }
 
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
 .grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 24px; align-items: start; }
-.row { display: flex; gap: 10px; align-items: center; }
+/* flex-wrap: isi baris turun ke bawah saat layar sempit, bukan melebar keluar layar */
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .spacer { flex: 1; }
 
 button, .btn { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
@@ -87,5 +88,16 @@ label { font-size: 13px; color: var(--muted); }
 .bar > div { height: 100%; background: var(--accent); transition: width .3s; }
 video { width: 100%; background: #000; border-radius: 10px; display: block; }
 
-@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+/* minmax(0, 1fr), bukan 1fr: teks panjang (nama file) tidak boleh memaksa kolom lebih lebar dari layar */
+@media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Ukuran HP */
+@media (max-width: 640px) {
+  main { padding: 20px 16px 48px; }
+  h1 { font-size: 24px; }
+  .card { padding: 14px; }
+  .topbar { padding: 10px 16px; }
+  .brand-name { display: none; }
+  .pill { padding: 5px 10px; font-size: 13px; }
+}
 </style>

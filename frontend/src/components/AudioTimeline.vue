@@ -14,6 +14,13 @@ const duration = store.info.duration
 
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 
+// Garis threshold. Warna dan pola dipakai bersama oleh canvas dan legenda.
+const LINES = [
+  { key: 'upper', label: 'threshold atas', color: '#ffd166', dash: [6, 4], css: 'dashed' },
+  { key: 'lower', label: 'threshold bawah', color: '#f4a261', dash: [3, 3], css: 'dashed' },
+  { key: 'noise_floor', label: 'noise floor', color: '#c0c6d0', dash: [1, 3], css: 'dotted' },
+]
+
 // Pola arsiran diagonal untuk wilayah yang dipotong.
 function hatch(ctx, color) {
   const c = document.createElement('canvas')
@@ -27,7 +34,7 @@ function hatch(ctx, color) {
 function draw() {
   const el = canvas.value
   if (!el) return
-  const { energy, step, upper, lower, noise_floor } = store.timeline
+  const { energy, step, noise_floor } = store.timeline
   const segments = store.edl.segments.map((s) => [s.start, s.end, s.action]) // dibaca di sini agar watchEffect ikut melacak perubahan aksi
   const showL = showLines.value
   zoom.value // dilacak agar ukuran canvas digambar ulang saat zoom
@@ -57,20 +64,13 @@ function draw() {
   energy.forEach((db, i) => ctx.fillRect(x(i * step), y(db), bw, H - y(db)))
 
   if (showL) {
-    // Label tiap garis diberi posisi x berbeda karena nilainya sering hanya selisih beberapa dB.
-    const line = (db, color, dash, text, lx) => {
+    // Nilai tiap garis ditulis di legenda (HTML), bukan di canvas, agar tidak saling tumpuk di layar sempit.
+    for (const { key, color, dash } of LINES) {
+      const ly = y(store.timeline[key])
       ctx.strokeStyle = color
       ctx.setLineDash(dash)
-      ctx.beginPath(); ctx.moveTo(0, y(db)); ctx.lineTo(w, y(db)); ctx.stroke()
-      ctx.fillStyle = '#000a'
-      ctx.fillRect(lx - 3, y(db) - 15, ctx.measureText(text).width + 6, 14)
-      ctx.fillStyle = color
-      ctx.fillText(text, lx, y(db) - 4)
+      ctx.beginPath(); ctx.moveTo(0, ly); ctx.lineTo(w, ly); ctx.stroke()
     }
-    ctx.font = '11px system-ui'
-    line(upper, '#ffd166', [6, 4], `threshold atas ${upper.toFixed(1)} dB`, 6)
-    line(lower, '#f4a261', [3, 3], `threshold bawah ${lower.toFixed(1)} dB`, 170)
-    line(noise_floor, '#c0c6d0', [1, 3], `noise floor ${noise_floor.toFixed(1)} dB`, 350)
     ctx.setLineDash([])
   }
 
@@ -94,7 +94,7 @@ function onClick(e) {
 
 <template>
   <div class="row">
-    <h3 style="margin: 0">Timeline Audio</h3>
+    <h3 style="margin: 0; white-space: nowrap">Timeline Audio</h3>
     <div class="spacer"></div>
     <label class="check"><input v-model="showLines" type="checkbox" /> Garis threshold</label>
     <button @click="zoom = Math.max(1, zoom / 2)">−</button>
@@ -110,6 +110,12 @@ function onClick(e) {
   <div class="row legend">
     <span><i class="sw speech"></i> Suara</span>
     <span><i class="sw cut"></i> Jeda dipotong</span>
+    <template v-if="showLines">
+      <span v-for="l in LINES" :key="l.key">
+        <i class="ln" :style="{ borderTopColor: l.color, borderTopStyle: l.css }"></i>
+        {{ l.label }} {{ store.timeline[l.key].toFixed(1) }} dB
+      </span>
+    </template>
   </div>
 </template>
 
@@ -119,7 +125,8 @@ function onClick(e) {
 canvas { display: block; width: 100%; height: 190px; cursor: pointer; }
 .playhead { position: absolute; top: 0; height: 170px; width: 2px; background: #fff; pointer-events: none; }
 .check { display: flex; gap: 6px; align-items: center; color: var(--text); font-size: 14px; }
-.legend { gap: 20px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+.legend { gap: 6px 20px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+.ln { display: inline-block; width: 18px; border-top: 2px dashed; vertical-align: middle; margin-right: 4px; }
 .sw { display: inline-block; width: 12px; height: 12px; vertical-align: -1px; margin-right: 4px; }
 .sw.speech { background: var(--accent); }
 .sw.cut { background: repeating-linear-gradient(45deg, var(--cut) 0 2px, transparent 2px 5px); border: 1px solid var(--cut); }

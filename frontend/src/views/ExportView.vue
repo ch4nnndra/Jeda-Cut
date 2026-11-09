@@ -103,4 +103,11 @@ const summary = computed(() => [
 .hatched { background: repeating-linear-gradient(45deg, var(--panel2) 0 4px, var(--border) 4px 8px); }
 .kv { justify-content: space-between; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
 pre { white-space: pre-wrap; }
+.file .spacer { min-width: 0; overflow-wrap: anywhere; } /* nama file panjang dipatah, tidak melebar */
+
+@media (max-width: 640px) {
+  .file .btn { flex: 1 1 100%; }
+  .done-icon { width: 44px; height: 44px; font-size: 20px; }
+  .saved { font-size: 28px; }
+}
 </style>
