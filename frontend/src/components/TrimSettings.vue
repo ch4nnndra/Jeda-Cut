@@ -42,7 +42,7 @@ const reset = () => Object.assign(p, store.defaults)
       <label class="check"><input v-model="p.video_crossfade" type="checkbox" /> Crossfade video (3 frame)</label>
       <label>Encoder</label>
       <select v-model="p.encoder">
-        <option value="auto">Otomatis (h264_nvenc jika GPU mendukung)</option>
+        <option value="auto">Otomatis</option>
         <option value="h264_nvenc">h264_nvenc</option>
         <option value="libx264">libx264 (CRF 20)</option>
       </select>

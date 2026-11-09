@@ -76,7 +76,6 @@ button:hover:not(:disabled), .btn:hover { border-color: var(--accent); }
 button:disabled { opacity: .45; cursor: default; }
 .primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .block { width: 100%; padding: 13px; }
-.link { background: none; border: none; color: var(--muted); text-decoration: underline; padding: 0; }
 
 input, select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
   padding: 8px 10px; font: inherit; width: 100%; }

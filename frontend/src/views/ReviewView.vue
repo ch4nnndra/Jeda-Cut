@@ -92,7 +92,7 @@ async function run(fn) {
 
   <p v-if="error" class="error">{{ error }}</p>
   <div class="row footer">
-    <button class="link" @click="store.step = 1">← Kembali ke pengaturan</button>
+    <button @click="store.step = 1">← Kembali ke pengaturan</button>
     <div class="spacer"></div>
     <button class="primary" :disabled="busy || !kept" @click="run(startRender)">Render Video →</button>
   </div>
@@ -106,12 +106,12 @@ async function run(fn) {
 .controls span { white-space: nowrap; }
 .sliders { margin-top: 18px; gap: 24px; align-items: flex-end; }
 .footer { margin-top: 24px; }
+.footer button { padding: 12px 20px; }
 
 /* HP: slider dan tombol bawah ditumpuk satu per baris dengan lebar penuh */
 @media (max-width: 640px) {
   .sliders > *, .footer > * { flex: 1 1 100%; }
   .footer .spacer { display: none; }
-  .footer .link { text-align: left; }
   .head .spacer { display: none; }
   .controls { gap: 6px; }
   .controls button { padding: 8px 11px; }
