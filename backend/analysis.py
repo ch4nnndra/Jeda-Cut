@@ -13,6 +13,14 @@ FRAME = 320   # frame 20 ms (3.2.3)
 HOP = 160     # hop 10 ms
 EPS = 1e-10   # mencegah log10(0) pada Persamaan (3.1)
 
+# Threshold adaptif (3.2.5). Angka dipilih dari benchmark 20 kondisi rekaman, lihat evaluate.py synth.
+MARGIN_DB = 6     # threshold atas minimal 6 dB (amplitudo 2x) di atas noise floor
+CEIL_DB = 10      # threshold atas maksimal 10 dB di bawah level ucapan (P90 energi)
+HYST_DB = 3       # selisih minimal threshold atas dan bawah (3.2.6)
+WEAK_DB = 25      # blip terisolasi yang puncaknya 25 dB di bawah level ucapan dianggap derau/napas
+                  # (25, bukan 20: hasil benchmark sama, tapi ucapan pelan sampai -25 dB tetap aman)
+WEAK_MAX = 0.6    # ... asalkan lebih pendek dari 0,6 detik
+
 
 class TrimParams(BaseModel):
     """Parameter trim. Nilai bawaan mengikuti Tabel 3.2, batas ge/le adalah validasi input."""
@@ -20,10 +28,6 @@ class TrimParams(BaseModel):
     min_speech: float = Field(0.15, ge=0, le=2)
     pad_start: float = Field(0.15, ge=0, le=1)
     pad_end: float = Field(0.20, ge=0, le=1)
-    # Metode statistik (mu + k sigma) dihapus: noise floor sering terisi ucapan pelan sehingga
-    # threshold terlalu tinggi dan ucapan pelan ikut terpotong. Bawaan diganti midpoint.
-    threshold_method: Literal["midpoint", "dual"] = "midpoint"
-    hysteresis_db: float = Field(3, ge=0, le=12)
     median: int = Field(5, ge=1, le=15)
     zcr_rescue: bool = True
     audio_crossfade_ms: float = Field(15, ge=0, le=50)
@@ -85,30 +89,28 @@ def features(y):
     return energy, zcr
 
 
-def thresholds(energy, zcr, p):
-    """Noise floor + threshold adaptif (3.2.5). Hasil: upper, lower, noise floor, batas ZCR."""
-    # Noise floor dari 10% frame paling pelan di seluruh rekaman, bukan dari bagian awal saja.
-    quiet = np.argsort(energy)[: max(1, len(energy) // 10)]
-    mu = energy[quiet].mean()
+def thresholds(energy, zcr):
+    """Threshold adaptif (3.2.5). Hasil: upper, lower, noise floor, batas ZCR, level ucapan (P90)."""
+    # Frame hening digital (energi = log10(EPS) = -100 dB, misal mic di-mute) diabaikan: kalau ikut
+    # dihitung, sebaran noise floor membengkak dan threshold naik sampai ucapan pelan terpotong.
+    idx = np.flatnonzero(energy > -90)
+    idx = idx if idx.size else np.arange(len(energy))
+    # Noise floor = median 5% frame terpelan. Persentil kecil + median membuatnya tetap mewakili
+    # derau walau rekaman hampir tanpa jeda (10% frame terpelan masih berisi ucapan pelan).
+    quiet = idx[np.argsort(energy[idx])[: max(1, idx.size // 20)]]
+    floor = np.median(energy[quiet])
+    spread = 1.4826 * np.median(np.abs(energy[quiet] - floor))  # simpangan baku versi robust (MAD)
+    level = np.percentile(energy[idx], 90)                      # level ucapan keras
     z_lim = zcr[quiet].mean() + 2 * zcr[quiet].std()
 
-    if p["threshold_method"] == "dual":
-        # Rumus Rao dkk. berlaku pada energi linear, jadi dB dikembalikan ke linear dulu.
-        e = 10 ** (energy / 10)
-        emin = max(np.percentile(e, 5), EPS)  # persentil ke-5 agar tidak nol saat ada hening total
-        t1 = emin * (5 + 2 * np.log10(e.max() / emin))      # (3.4)
-        above = e[e > t1]
-        sl = above.mean() if above.size else t1             # (3.5)
-        t2 = t1 + 0.25 * (sl - t1)                          # (3.6)
-        upper, lower = 10 * np.log10(t2), 10 * np.log10(t1)
-    else:
-        upper = (np.percentile(energy, 10) + np.percentile(energy, 90)) / 2  # midpoint (3.7)
-        lower = None
-
-    # Pengaman: minimal 6 dB di atas noise floor, maksimal -20 dBFS.
-    upper = min(max(upper, mu + 6), -20)
-    lower = upper - p["hysteresis_db"] if lower is None else min(lower, upper)
-    return float(upper), float(lower), float(mu), float(z_lim)
+    # Threshold atas = noise floor + margin (min 6 dB, atau 3x sebaran derau bila derau berfluktuasi),
+    # dibatasi 10 dB di bawah level ucapan agar ucapan pelan tidak hilang. Lantai floor + 6 dB selalu
+    # menang, supaya pada rekaman sangat bising (SNR rendah) jeda tetap terpotong.
+    upper = max(min(floor + max(MARGIN_DB, 3 * spread), level - CEIL_DB), floor + MARGIN_DB)
+    # Threshold bawah dekat noise floor (histeresis lebar): sekali ucapan mulai, ekor kata yang meluruh
+    # pelan tetap dipertahankan sampai energi benar-benar turun ke tingkat derau.
+    lower = min(upper - HYST_DB, floor + MARGIN_DB)
+    return float(upper), float(lower), float(floor), float(z_lim), float(level)
 
 
 def classify(energy, zcr, upper, lower, z_lim, rescue=True):
@@ -133,26 +135,39 @@ def classify(energy, zcr, upper, lower, z_lim, rescue=True):
     return speech
 
 
-def speech_ranges(speech, duration, p):
-    """Label per frame -> rentang keep (detik) dengan aturan segmen (3.2.8)."""
+def speech_ranges(speech, energy, weak_db, duration, p):
+    """Label per frame -> rentang keep (detik) dengan aturan segmen (3.2.8).
+
+    weak_db: blip terisolasi < WEAK_MAX detik yang puncak energinya di bawah nilai ini dibuang.
+    None = aturan ini tidak dipakai.
+    """
+    sec = lambda f: f * HOP / SR  # indeks frame -> detik
     edges = np.diff(np.concatenate([[0], speech.astype(np.int8), [0]]))
-    starts, ends = np.flatnonzero(edges == 1), np.flatnonzero(edges == -1)
-    runs = [[s * HOP / SR, ((e - 1) * HOP + FRAME) / SR] for s, e in zip(starts, ends)]
+    runs = [[s, e] for s, e in zip(np.flatnonzero(edges == 1), np.flatnonzero(edges == -1))]
 
     # Aturan 1: jeda lebih pendek dari min_silence tidak dipotong, rentang suara digabung.
+    # Rentang disimpan sebagai indeks frame [awal, akhir) supaya energinya bisa dicek di aturan 2.
     merged = []
     for s, e in runs:
-        if merged and s - merged[-1][1] < p["min_silence"]:
+        if merged and sec(s) - (sec(merged[-1][1] - 1) + FRAME / SR) < p["min_silence"]:
             merged[-1][1] = e
         else:
             merged.append([s, e])
 
-    # Aturan 2: suara berdiri sendiri yang lebih pendek dari min_speech (klik, ketukan) dibuang.
-    merged = [r for r in merged if r[1] - r[0] >= p["min_speech"]]
+    # Aturan 2: suara berdiri sendiri dibuang jika lebih pendek dari min_speech (klik, ketukan),
+    # atau pendek dan jauh lebih pelan dari ucapan (napas, gesekan mic di tengah jeda).
+    kept = []
+    for s, e in merged:
+        start, end = sec(s), sec(e - 1) + FRAME / SR
+        if end - start < p["min_speech"]:
+            continue
+        if weak_db is not None and end - start < WEAK_MAX and energy[s:e].max() < weak_db:
+            continue
+        kept.append([start, end])
 
     # Aturan 3 dan 4: padding, gabung yang tumpang tindih, potong ke batas file.
     keeps = []
-    for s, e in merged:
+    for s, e in kept:
         s, e = max(0.0, s - p["pad_start"]), min(duration, e + p["pad_end"])
         if keeps and s <= keeps[-1][1]:
             keeps[-1][1] = max(keeps[-1][1], e)
@@ -173,21 +188,22 @@ def build_segments(keeps, duration):
     return segs
 
 
-def detect(x, duration, p):
-    """Pipeline deteksi pada sinyal mono 16 kHz. Dipisah dari load_audio agar bisa diuji/ditambah derau."""
+def detect(x, duration, p, thr=thresholds):
+    """Pipeline deteksi pada sinyal mono 16 kHz. Dipisah dari load_audio agar bisa diuji/ditambah derau.
+
+    thr bisa diganti fungsi threshold lain (dipakai evaluate.py untuk metode pembanding).
+    """
     if len(x) < SR // 2:
         raise ValueError("Audio terlalu pendek untuk dianalisis (minimal 0,5 detik)")
     energy, zcr = features(preprocess(x))
-    upper, lower, floor, z_lim = thresholds(energy, zcr, p)
+    upper, lower, floor, z_lim, level = thr(energy, zcr)
     speech = classify(energy, zcr, upper, lower, z_lim, p["zcr_rescue"])
-    if p["median"] > 1:
-        # Smoothing median (3.2.7). Kernel medfilt wajib ganjil.
-        speech = medfilt(speech.astype(float), p["median"] | 1) > 0.5
-    keeps = speech_ranges(speech, duration, p)
+    # Smoothing median (3.2.7). Kernel wajib ganjil, kernel 1 = tanpa smoothing.
+    speech = medfilt(speech.astype(float), p["median"] | 1) > 0.5
+    keeps = speech_ranges(speech, energy, None if level is None else level - WEAK_DB, duration, p)
 
     # Ringkasan energi untuk timeline: nilai maksimum per 100 ms (10 frame) agar data tetap ringan.
-    n = len(energy) // 10 * 10
-    env = energy[:n].reshape(-1, 10).max(axis=1) if n else energy
+    env = energy[: len(energy) // 10 * 10].reshape(-1, 10).max(axis=1)
     return {
         "segments": build_segments(keeps, duration),
         "timeline": {"step": 0.1, "energy": np.round(env, 1).tolist(),

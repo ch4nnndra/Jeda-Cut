@@ -97,12 +97,13 @@ function onClick(e) {
     <h3 style="margin: 0; white-space: nowrap">Timeline Audio</h3>
     <div class="spacer"></div>
     <label class="check"><input v-model="showLines" type="checkbox" /> Garis threshold</label>
-    <button @click="zoom = Math.max(1, zoom / 2)">−</button>
-    <button @click="zoom = Math.min(16, zoom * 2)">+</button>
+    <button aria-label="Perkecil timeline" :disabled="zoom === 1" @click="zoom = Math.max(1, zoom / 2)">−</button>
+    <button aria-label="Perbesar timeline" :disabled="zoom === 16" @click="zoom = Math.min(16, zoom * 2)">+</button>
   </div>
   <div class="wrap">
     <div class="inner" :style="{ width: zoom * 100 + '%' }">
-      <canvas ref="canvas" @click="onClick"></canvas>
+      <canvas ref="canvas" role="img" aria-label="Grafik energi audio per 100 ms, wilayah berarsir merah akan dipotong. Klik untuk melompat ke waktu tersebut."
+              @click="onClick"></canvas>
       <!-- Playhead dibuat div terpisah agar canvas tidak perlu digambar ulang setiap frame. -->
       <div class="playhead" :style="{ left: (now / duration) * 100 + '%' }"></div>
     </div>

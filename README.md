@@ -42,7 +42,6 @@ backend/
   main.py           REST API (Tabel 3.4)
   evaluate.py       evaluasi objektif dan subjektif (3.4)
   test_analysis.py  self-check deteksi dan render graph
-  Dockerfile        image backend untuk Hugging Face Spaces (README.md di folder ini = konfigurasi Space)
 frontend/src/
   store.js          state bersama dan pemanggil API
   App.vue           header langkah dan tema
@@ -85,4 +84,3 @@ Catatan:
 - Laptop harus tetap menyala (jangan sleep) selama aplikasi dipakai.
 - Upload lewat Cloudflare gratis maksimal 100 MB per file.
 - File upload di `backend/storage/` dihapus setiap backend dijalankan ulang.
-- Opsional: `backend/Dockerfile` dan `backend/README.md` siap dipakai untuk Hugging Face Spaces (butuh paket PRO).

@@ -1,6 +1,10 @@
 """Modul render JedaCut: EDL -> MP4 dengan FFmpeg (subbab 3.2.10)."""
+import math
 import subprocess
 from functools import lru_cache
+
+GROUP_MIN = 20    # bagian keep per kelompok input
+MAX_INPUTS = 25   # batas jumlah input (tiap input = satu decoder, sekitar 30 MB memori)
 
 
 @lru_cache(maxsize=None)
@@ -31,45 +35,61 @@ def keep_ranges(segments):
     return keeps
 
 
-def build_graph(keeps, has_video, fade):
-    """Susun filtergraph: trim/atrim per segmen keep, lalu concat. Output berlabel [v] dan [a].
+def build_graph(src, keeps, has_video, fade):
+    """Susun argumen input dan filtergraph: trim/atrim per bagian keep, lalu concat ke [v] dan [a].
+
+    Render per kelompok (3.2.10): bagian keep dikelompokkan, dan tiap kelompok membaca file sumber
+    sebagai input tersendiri yang di-seek (-ss/-t) hanya ke rentangnya. Kalau semua trim membaca satu
+    input, setiap frame dikirim ke ratusan filter trim sekaligus, sehingga bebannya naik kuadratik
+    terhadap durasi (video 30 menit: 34 menit ekspor, versi kelompok: kurang dari 3 menit).
 
     fade = durasi fade audio (detik) di tiap titik potong, 0 jika nonaktif.
+    Return (argumen input ffmpeg, filtergraph).
     """
-    lines = []
-    for i, (s, e) in enumerate(keeps):
-        if has_video:
-            lines.append(f"[0:v]trim=start={s}:end={e},setpts=PTS-STARTPTS[v{i}]")
-        a = f"[0:a]atrim=start={s}:end={e},asetpts=PTS-STARTPTS"
-        if fade:
-            # Fade out + fade in 15 ms di tiap sambungan, bukan acrossfade yang saling tumpang.
-            # acrossfade memendekkan audio 15 ms per potongan sehingga 100 potongan = 1,5 s tidak sinkron.
-            a += f",afade=t=in:d={fade},afade=t=out:st={max(0, e - s - fade):.4f}:d={fade}"
-        lines.append(a + f"[a{i}]")
+    size = max(GROUP_MIN, math.ceil(len(keeps) / MAX_INPUTS))
+    args, lines, pads = [], [], ""
+    for g, i in enumerate(range(0, len(keeps), size)):
+        group = keeps[i:i + size]
+        a, b = group[0][0], group[-1][1]
+        # -ss sebagai opsi input + re-encode tetap akurat per frame: FFmpeg seek ke keyframe
+        # sebelumnya lalu membuang frame sampai titik a.
+        args += ["-ss", f"{a:.3f}", "-t", f"{b - a:.3f}", "-i", str(src)]
+        for j, (s, e) in enumerate(group):
+            s, e, n = s - a, e - a, f"{g}_{j}"  # waktu relatif terhadap awal input kelompok
+            if has_video:
+                lines.append(f"[{g}:v]trim=start={s:.3f}:end={e:.3f},setpts=PTS-STARTPTS[v{n}]")
+                pads += f"[v{n}]"
+            au = f"[{g}:a]atrim=start={s:.3f}:end={e:.3f},asetpts=PTS-STARTPTS"
+            if fade:
+                # Fade out + fade in 15 ms di tiap sambungan, bukan acrossfade yang saling tumpang.
+                # acrossfade memendekkan audio 15 ms per potongan sehingga 100 potongan = 1,5 s tidak sinkron.
+                au += f",afade=t=in:d={fade},afade=t=out:st={max(0, e - s - fade):.4f}:d={fade}"
+            lines.append(au + f"[a{n}]")
+            pads += f"[a{n}]"
 
-    pads = "".join((f"[v{i}]" if has_video else "") + f"[a{i}]" for i in range(len(keeps)))
     lines.append(f"{pads}concat=n={len(keeps)}:v={int(has_video)}:a=1" + ("[v]" if has_video else "") + "[a]")
-    return ";\n".join(lines)
+    return args, ";\n".join(lines)
 
 
-def render(src, edl, info, out, on_progress=lambda pct: None):
-    """Render video dari EDL. Return nama encoder yang dipakai."""
+def render(src, edl, info, out, on_progress=lambda pct: None, on_start=lambda proc: None):
+    """Render video dari EDL. Return nama encoder yang dipakai.
+
+    on_start menerima proses FFmpeg begitu dijalankan, supaya pemanggil bisa membatalkannya.
+    """
     p = edl["params"]
     keeps = keep_ranges(edl["segments"])
     if not keeps:
         raise ValueError("Tidak ada segmen Pertahankan di EDL")
 
     has_video = info["has_video"]
-    graph = build_graph(keeps, has_video, p.get("audio_crossfade_ms", 15) / 1000)
+    inputs, graph = build_graph(src, keeps, has_video, p.get("audio_crossfade_ms", 15) / 1000)
     total = sum(e - s for s, e in keeps)
 
     # Graph ditulis ke file, karena ratusan potongan bisa melebihi batas panjang command line Windows.
-    # Ini pengganti render per bagian (3.2.10).
-    # ponytail: satu proses FFmpeg untuk semua segmen, pecah per bagian jika memori jadi masalah.
     graph_file = out.with_suffix(".filter.txt")
     graph_file.write_text(graph, encoding="utf-8")
 
-    cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(src), "-/filter_complex", str(graph_file)]
+    cmd = ["ffmpeg", "-y", "-v", "error", *inputs, "-/filter_complex", str(graph_file)]
     encoder = None
     if has_video:
         encoder = pick_encoder(p.get("encoder", "auto"))
@@ -81,6 +101,7 @@ def render(src, edl, info, out, on_progress=lambda pct: None):
             "-progress", "pipe:1", "-nostats", str(out)]
 
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    on_start(proc)
     # -progress menulis baris "out_time_us=..." berkala ke stdout, dipakai untuk persen progres.
     for line in proc.stdout:
         key, _, val = line.strip().partition("=")

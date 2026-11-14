@@ -1,9 +1,9 @@
 """Server REST API JedaCut (Tabel 3.4). Jalankan: python main.py"""
-import json
 import os
 import shutil
 import subprocess
 import threading
+import time
 import uuid
 from pathlib import Path
 from typing import List, Literal
@@ -23,7 +23,7 @@ ALLOWED = {".mp4", ".mkv", ".mov", ".webm", ".wav", ".mp3"}
 
 # File hanya disimpan sementara selama proses (3.3.1), jadi dibersihkan tiap server start.
 shutil.rmtree(STORAGE, ignore_errors=True)
-STORAGE.mkdir()
+STORAGE.mkdir(exist_ok=True)  # tetap jalan walau ada file yang terkunci dan tidak ikut terhapus
 
 # ponytail: job disimpan di memori, hilang saat server restart. Pakai database jika butuh multi-user.
 jobs = {}
@@ -56,11 +56,6 @@ def get_job(jid):
     if jid not in jobs:
         raise HTTPException(404, "ID tidak ditemukan, silakan unggah ulang")
     return jobs[jid]
-
-
-def save_edl(job, edl):
-    job["edl"] = edl
-    (job["dir"] / "edl.json").write_text(json.dumps(edl, indent=2), encoding="utf-8")
 
 
 @app.get("/api/defaults")
@@ -104,30 +99,43 @@ def analyze(jid: str, params: TrimParams):
         result = analysis.analyze(job["src"], job["info"]["duration"], p)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    edl = {"source": job["name"], "params": p, "segments": result["segments"]}
-    save_edl(job, edl)
-    return {"edl": edl, "timeline": result["timeline"]}
+    job["edl"] = {"source": job["name"], "params": p, "segments": result["segments"]}
+    return {"edl": job["edl"], "timeline": result["timeline"]}
 
 
 @app.put("/api/edl/{jid}")
 def update_edl(jid: str, edl: Edl):
     job = get_job(jid)
     limit = job["info"]["duration"] + 0.01
-    if any(s.start >= s.end or s.end > limit for s in edl.segments):
+    segs = edl.segments
+    # Tiap segmen valid, dan segmen urut tanpa tumpang tindih (kalau tumpang tindih, bagian itu ter-render dua kali).
+    if any(s.start >= s.end or s.end > limit for s in segs) or any(a.end > b.start + 1e-3 for a, b in zip(segs, segs[1:])):
         raise HTTPException(400, "Segmen EDL tidak valid")
-    save_edl(job, edl.model_dump())
+    job["edl"] = edl.model_dump()
     return {"ok": True}
 
 
 def run_render(job):
     out = job["dir"] / "output.mp4"
+
+    def started(proc):
+        job["proc"] = proc
+        if job.get("cancelled"):  # dibatalkan sebelum FFmpeg sempat jalan
+            proc.terminate()
+
     try:
         encoder = render.render(job["src"], job["edl"], job["info"], out,
-                                lambda pct: job.update(progress=round(pct, 1)))
+                                lambda pct: job.update(progress=round(pct, 1)), started)
         job.update(status="done", progress=100, encoder=encoder,
                    out_size=out.stat().st_size, out_duration=analysis.probe(out)["duration"])
     except Exception as e:  # semua error render dikirim ke layar Ekspor
-        job.update(status="error", error=str(e))
+        if job.get("cancelled"):
+            out.unlink(missing_ok=True)  # buang file setengah jadi
+            job.update(status="cancelled")
+        else:
+            job.update(status="error", error=str(e))
+    finally:
+        job.pop("proc", None)
 
 
 @app.post("/api/render/{jid}")
@@ -137,9 +145,27 @@ def start_render(jid: str):
         raise HTTPException(400, "Jalankan analisis terlebih dahulu")
     if job["status"] == "rendering":
         raise HTTPException(409, "Render sedang berjalan")
-    job.update(status="rendering", progress=0, error=None)
+    job.update(status="rendering", progress=0, error=None, cancelled=False)
     threading.Thread(target=run_render, args=(job,), daemon=True).start()
     return {"status": "rendering"}
+
+
+@app.post("/api/cancel/{jid}")
+def cancel_render(jid: str):
+    """Hentikan render yang sedang berjalan. Pengguna bisa kembali ke layar Periksa lalu render ulang."""
+    job = get_job(jid)
+    if job["status"] != "rendering":
+        raise HTTPException(409, "Tidak ada render yang sedang berjalan")
+    job["cancelled"] = True
+    if job.get("proc"):
+        job["proc"].terminate()
+    # Tunggu thread render selesai beres-beres (biasanya < 1 detik), supaya status sudah final saat
+    # antarmuka kembali ke layar Periksa, dan render ulang tidak bentrok dengan render lama (409).
+    for _ in range(100):
+        if job["status"] != "rendering":
+            break
+        time.sleep(0.05)
+    return {"status": job["status"]}
 
 
 @app.get("/api/status/{jid}")

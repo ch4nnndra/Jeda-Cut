@@ -15,36 +15,31 @@ const reset = () => Object.assign(p, store.defaults)
   <aside class="card">
     <h3>Pengaturan Trim</h3>
 
-    <label>Preset</label>
+    <span class="caption">Preset</span>
     <button class="preset" :class="{ primary: isDefault }" :disabled="isDefault" @click="reset">
       <span>{{ isDefault ? 'Default' : 'Diubah' }}</span>
       <span>{{ isDefault ? '✓' : 'klik untuk kembali ke Default' }}</span>
     </button>
 
-    <div class="mode"><span class="muted">Mode</span><strong>Trim jeda</strong></div>
+    <div class="mode"><span class="muted">Mode</span><strong>Trim jeda otomatis</strong></div>
 
-    <details open>
+    <!-- Ditutup secara bawaan: nilai Default sudah teruji, jadi pengguna tidak perlu mengatur apa pun -->
+    <details>
       <summary>Pengaturan lanjutan</summary>
       <div class="fields">
-        <div><label>Durasi jeda minimum (s)</label><input v-model.number="p.min_silence" type="number" step="0.05" min="0.1" max="5" /></div>
-        <div><label>Durasi suara minimum (s)</label><input v-model.number="p.min_speech" type="number" step="0.05" min="0" max="2" /></div>
-        <div><label>Padding awal (s)</label><input v-model.number="p.pad_start" type="number" step="0.01" min="0" max="1" /></div>
-        <div><label>Padding akhir (s)</label><input v-model.number="p.pad_end" type="number" step="0.01" min="0" max="1" /></div>
-        <div><label>Crossfade audio (ms)</label><input v-model.number="p.audio_crossfade_ms" type="number" step="1" min="0" max="50" /></div>
-        <div>
-          <label>Metode threshold</label>
-          <select v-model="p.threshold_method">
-            <option value="midpoint">Midpoint</option>
-            <option value="dual">Dual threshold</option>
+        <label class="field">Durasi jeda minimum (s)<input v-model.number="p.min_silence" type="number" step="0.05" min="0.1" max="5" /></label>
+        <label class="field">Durasi suara minimum (s)<input v-model.number="p.min_speech" type="number" step="0.05" min="0" max="2" /></label>
+        <label class="field">Padding awal (s)<input v-model.number="p.pad_start" type="number" step="0.01" min="0" max="1" /></label>
+        <label class="field">Padding akhir (s)<input v-model.number="p.pad_end" type="number" step="0.01" min="0" max="1" /></label>
+        <label class="field">Crossfade audio (ms)<input v-model.number="p.audio_crossfade_ms" type="number" step="1" min="0" max="50" /></label>
+        <label class="field">Encoder
+          <select v-model="p.encoder">
+            <option value="auto">Otomatis</option>
+            <option value="h264_nvenc">h264_nvenc</option>
+            <option value="libx264">libx264 (CRF 20)</option>
           </select>
-        </div>
+        </label>
       </div>
-      <label>Encoder</label>
-      <select v-model="p.encoder">
-        <option value="auto">Otomatis</option>
-        <option value="h264_nvenc">h264_nvenc</option>
-        <option value="libx264">libx264 (CRF 20)</option>
-      </select>
     </details>
 
     <button class="primary block" :disabled="disabled" @click="$emit('analyze')">
@@ -57,10 +52,13 @@ const reset = () => Object.assign(p, store.defaults)
 </template>
 
 <style scoped>
+.caption { font-size: 13px; color: var(--muted); }
 .preset { width: 100%; display: flex; justify-content: space-between; margin: 6px 0 14px; }
-.preset:disabled { opacity: 1; }
-.mode { display: flex; justify-content: space-between; border: 1px dashed var(--border); border-radius: 8px; padding: 10px 14px; }
+.preset:disabled { opacity: 1; cursor: default; }
+/* Info statis (bukan kontrol): latar polos tanpa garis putus-putus supaya tidak terlihat bisa diklik */
+.mode { display: flex; justify-content: space-between; background: var(--panel2); border-radius: 8px; padding: 10px 14px; }
 details { border-top: 1px solid var(--border); margin: 18px 0; padding-top: 14px; }
-summary { cursor: pointer; font-weight: 600; margin-bottom: 12px; }
-.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+details[open] summary { margin-bottom: 12px; }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 </style>
