@@ -5,7 +5,7 @@ setiap region label = satu ucapan:
     python evaluate.py detect klip1.mp4 klip2.mp4 --snr 30 20 10 [--noise kipas.wav] [--render] [--csv hasil.csv]
 
 Benchmark sintetis 20 kondisi rekaman dengan ground truth pasti. Folder berisi WAV kalimat bersih,
-satu kalimat per file, nama "suara_nomor.wav" (buat di Windows dengan make_sentences.ps1):
+satu kalimat per file, nama "suara_nomor.wav" (rekaman sendiri atau text-to-speech):
     python evaluate.py synth sentences --seeds 1 2
 
 Subjektif (Likert dan skor kuis, paired t-test atau Wilcoxon, alpha 0,05):

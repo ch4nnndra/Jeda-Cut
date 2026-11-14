@@ -3,3 +3,5 @@ frontend/dist/
 backend/storage/
 __pycache__/
 .claude/
+REPORT_CHANGES.md
+backend/make_sentences.ps1
